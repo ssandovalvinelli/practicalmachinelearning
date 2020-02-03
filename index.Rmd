@@ -1,0 +1,92 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Santiago Sandoval"
+date: "27/1/2020"
+output: html_document
+---
+```{r library}
+library(dplyr)
+library(caret)
+library(randomForest)
+library(rattle)
+library(e1071)
+library(rpart)
+library(openxlsx)
+```
+
+Import and upload the data
+
+```{r upload}
+validation<- read.csv("pml-testing.csv", header = TRUE)
+dim(validation)
+training <- read.csv("pml-training.csv", header = TRUE)
+dim(training)
+```
+
+Clean databases (eliminate variables that are completely empty and those with unnecesary information for the model)
+
+```{r clean}
+validation<- validation[,colSums(is.na(validation))==0]
+validation <- validation[,-c(1:7)]
+dim(validation)
+training <- training[,colSums(is.na(training))==0]
+training <- training[,-c(1:7)]
+dim(training)
+```
+
+Use the 75% of the training data to train the model and the remaining 25% for testing the model
+
+```{r partition}
+set.seed(56) 
+inTrain <- createDataPartition(training$classe, p = 0.75, list = FALSE)
+trainData <- training[inTrain, ]
+testData <- training[-inTrain, ]
+dim(trainData)
+dim(testData)
+```
+
+Remove variables with near zero variance and observations with missing values
+
+```{r nzv}
+nzv <- nearZeroVar(trainData)
+trainData <- trainData[, -nzv]
+testData  <- testData[, -nzv]
+
+trainData <- trainData[complete.cases(trainData),]
+testData <- testData[complete.cases(testData),]
+
+dim(trainData)
+dim(testData)
+```
+Given the fact that for this kind of predictions we need to use non linear models, I am going to use Decision Trees and Random Forest for the estimation.
+
+Now I proceed to run a model using Decision Trees with the train data
+
+```{r decision}
+decisiontree <- rpart(classe ~ ., data = trainData, method = "class")
+
+fancyRpartPlot(decisiontree)
+```
+
+The next step is to run another model but using Random Forest
+
+```{r random}
+rforest <- randomForest(classe ~ ., data = trainData, method="class")
+```
+
+Finally, I proceed to evaluate which of the two models fits better in the test dataset
+
+```{r test}
+confusionMatrix(testData$classe, predict(decisiontree, testData, type = "class"))
+
+confusionMatrix(testData$classe, predict(rforest, testData, type = "class"))
+```
+
+According to the results, Random Forest method makes predictions more accurately than Decision trees (99,4% vs 73.8%). Therefore, Random Forest will be used for predicting in the validation dataset.
+
+```{r predict}
+prediction <- predict(rforest, newdata = validation)
+print(prediction)
+write.xlsx(prediction, "prediction.xlsx", asTable = FALSE)
+```
+
